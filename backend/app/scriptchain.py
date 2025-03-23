@@ -1,11 +1,11 @@
 from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from dataclasses import dataclass
 import os
 from typing import Dict, Any, Optional
 from .context_manager import ContextManager
 from .model_config import LLMConfig
+from .prompt_templates import PromptGenerator, DEFAULT_LLM_TEMPLATE, PromptTemplate
 
 class ScriptChain:
     def __init__(self):
@@ -59,7 +59,13 @@ class ScriptChain:
         Returns:
             dict: A dictionary mapping input node IDs to their context data
         """
+        if node_id not in self.connections:
+            return {}
+            
         input_nodes = self.connections[node_id]['inputs']
+        if not input_nodes:
+            return {}
+            
         return self.context_manager.get_connected_context(input_nodes)
 
     def execute_node(self, node_id: str, message: str, metadata: Optional[Dict] = None) -> Any:
@@ -81,20 +87,25 @@ class ScriptChain:
         input_data = self.get_node_inputs(node_id)
         
         # Execute the node
-        result = node.execute(message, input_data)
-        
-        # Store the output in the context manager with metadata
-        self.context_manager.set_context(
-            node_id,
-            result,
-            metadata={
-                "type": node.node_type,
-                "timestamp": os.environ.get("CURRENT_TIMESTAMP", ""),
-                **(metadata or {})
-            }
-        )
-        
-        return result
+        try:
+            result = node.execute(message, input_data, self.context_manager)
+            
+            # Store the output in the context manager with metadata
+            self.context_manager.set_context(
+                node_id,
+                result,
+                metadata={
+                    "type": node.node_type,
+                    "timestamp": os.environ.get("CURRENT_TIMESTAMP", ""),
+                    **(metadata or {})
+                },
+                input_data=message,
+                connected_inputs=input_data
+            )
+            
+            return result
+        except Exception as e:
+            raise Exception(f"Error executing node {node_id}: {str(e)}")
 
     def clear_context(self, node_id: Optional[str] = None) -> None:
         """Clear context data for a specific node or all nodes.
@@ -125,34 +136,33 @@ class Node:
         self.model_config = model_config or LLMConfig()
         self.last_output = None
 
-    def execute(self, message, input_data=None):
-        # Create a more detailed prompt that includes context from connected nodes
-        base_prompt = """Please provide a detailed and thoughtful response to the following prompt.
-Take your time to analyze the request and provide comprehensive information.
-
-User Input: {input}
-
-{context}
-
-Please provide a well-structured, informative response that thoroughly addresses the user's input."""
-
-        # Add context from connected nodes if available
-        context = ""
-        if input_data and input_data.items():
-            context = "\nContext from connected nodes:\n" + "\n".join([
-                f"From {node_id}: {content}"
-                for node_id, content in input_data.items()
-            ])
-
-        prompt = PromptTemplate(
-            input_variables=["input", "context"],
-            template=base_prompt
-        )
+    def execute(self, message: str, input_data: Dict[str, Any], context_manager: ContextManager) -> Any:
+        """Execute the node with input and historical context.
         
+        Args:
+            message: Current input message
+            input_data: Inputs from connected nodes
+            context_manager: Context manager instance for accessing history
+            
+        Returns:
+            Node output
+        """
+        # Get relevant historical examples
+        history_records = context_manager.get_relevant_history(self.node_id, message)
+        
+        # Format context and history
+        context = PromptGenerator.format_context(input_data)
+        history = PromptGenerator.format_history(history_records)
+        
+        # Create prompt template
+        prompt = PromptTemplate.from_template(DEFAULT_LLM_TEMPLATE)
+        
+        # Get API key
         api_key = os.getenv(self.model_config.api_key_env_var)
         if not api_key:
             raise ValueError(f"API key not found in environment variable {self.model_config.api_key_env_var}")
             
+        # Initialize LLM
         llm = OpenAI(
             api_key=api_key,
             model_name=self.model_config.model,
@@ -160,9 +170,20 @@ Please provide a well-structured, informative response that thoroughly addresses
             max_tokens=self.model_config.max_tokens
         )
         
+        # Create and run chain
         chain = LLMChain(llm=llm, prompt=prompt)
         try:
-            response = chain.run(input=message, context=context)
+            response = chain.run(
+                input=message,
+                context=context,
+                history=history,
+                instructions=PromptGenerator.generate_dynamic_instructions({
+                    "input_keys": self.input_keys,
+                    "output_keys": self.output_keys,
+                    "model_config": self.model_config.__dict__,
+                    "output_format": getattr(self, "output_format", None)
+                })
+            )
             self.last_output = response.strip()
             return self.last_output
         except Exception as e:
@@ -170,4 +191,4 @@ Please provide a well-structured, informative response that thoroughly addresses
 
     def process(self):
         # This is kept for backward compatibility
-        return self.execute("Default processing")
+        return self.execute("Default processing", {}, ContextManager())

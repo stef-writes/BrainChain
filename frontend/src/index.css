@@ -22,6 +22,14 @@ body {
   text-align: center;
   border-width: 1px;
   border-style: solid;
+  overflow: visible !important;
+  height: auto !important;
+  cursor: move;
+}
+
+.react-flow__node textarea {
+  cursor: text;
+  pointer-events: auto;
 }
 
 .react-flow__node-input {
@@ -157,6 +165,8 @@ body {
   overflow: visible;
   position: relative;
   transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-node:hover {
@@ -169,6 +179,7 @@ body {
   gap: 12px;
   width: 100%;
   min-width: 270px;
+  overflow: visible;
 }
 
 .node-header {
@@ -259,6 +270,8 @@ body {
   box-sizing: border-box;
   margin: 0;
   transition: all 0.2s ease;
+  cursor: text;
+  pointer-events: auto;
 }
 
 .node-input:focus {
@@ -383,6 +396,15 @@ body {
   overflow: visible;
 }
 
+.response-container {
+  width: 100%;
+  position: relative;
+  overflow: visible;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+}
+
 .response-container textarea {
   background-color: #f5f5f5;
   width: 100%;
@@ -391,6 +413,12 @@ body {
   position: relative;
   z-index: 1;
   max-width: none;
+  resize: both;
+  overflow-y: auto;
+  cursor: text;
+  pointer-events: auto;
+  display: block;
+  box-sizing: border-box;
 }
 
 .response-container p {
@@ -465,4 +493,15 @@ body {
 .variable-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.output-section {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.2s ease;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
 } 

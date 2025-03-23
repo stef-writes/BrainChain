@@ -7,6 +7,10 @@ import json
 from typing import Any, Dict, Optional, Type
 from .model_config import BaseModelConfig, LLMConfig
 from .prompt_templates import PromptTemplate, PromptGenerator, DEFAULT_LLM_TEMPLATE
+from .context_manager import ContextManager
+import logging
+
+logger = logging.getLogger(__name__)
 
 class BaseNode(ABC):
     def __init__(
@@ -27,7 +31,7 @@ class BaseNode(ABC):
         self.metadata = kwargs.get("metadata", {})
 
     @abstractmethod
-    def execute(self, message: str, input_data: Optional[Dict[str, Any]] = None) -> Any:
+    def execute(self, message: str, input_data: Optional[Dict[str, Any]] = None, context_manager: Optional[ContextManager] = None) -> Any:
         pass
 
     def _generate_context(self, input_data: Optional[Dict[str, Any]]) -> str:
@@ -97,53 +101,93 @@ class LLMNode(BaseNode):
         
         # Initialize prompt template
         try:
-            self.prompt_template = PromptTemplate.from_template(prompt_template) if prompt_template else PromptTemplate(DEFAULT_LLM_TEMPLATE)
+            self.prompt_template = PromptTemplate.from_template(prompt_template) if prompt_template else PromptTemplate.from_template(DEFAULT_LLM_TEMPLATE)
         except ValueError as e:
             # If custom template is invalid, fall back to default
             print(f"Warning: Invalid prompt template for node {node_id}: {str(e)}. Using default template.")
-            self.prompt_template = PromptTemplate(DEFAULT_LLM_TEMPLATE)
+            self.prompt_template = PromptTemplate.from_template(DEFAULT_LLM_TEMPLATE)
 
-    def _generate_prompt(self, message: str, input_data: Optional[Dict[str, Any]] = None) -> str:
-        """Generate a prompt using the template and available data.
+    def execute(self, message: str, input_data: Optional[Dict[str, Any]] = None, context_manager: Optional[ContextManager] = None) -> str:
+        """Execute the LLM node with input and historical context.
         
         Args:
-            message: The input message
-            input_data: Optional dictionary of input data from connected nodes
+            message: Current input message
+            input_data: Inputs from connected nodes
+            context_manager: Context manager instance for accessing history
             
         Returns:
-            Formatted prompt string
+            Node output
         """
-        # Generate dynamic instructions based on node configuration
+        logger.info(f"Executing LLM node {self.node_id}")
+        logger.debug(f"Input message: {message}")
+        logger.debug(f"Input data: {input_data}")
+        
+        self.validate_api_key()
+        
+        # Get relevant historical examples if context manager is provided
+        history_records = []
+        if context_manager:
+            logger.debug("Context manager provided, getting relevant history")
+            try:
+                history_records = context_manager.get_relevant_history(self.node_id, message)
+                logger.debug(f"Retrieved {len(history_records)} history records")
+            except Exception as e:
+                logger.error(f"Error getting history records: {str(e)}")
+                history_records = []
+        
+        # Format context and history
+        logger.debug("Formatting context and history")
+        context = self._generate_context(input_data)
+        logger.debug(f"Formatted context: {context}")
+        
+        try:
+            history = PromptGenerator.format_history(history_records)
+            logger.debug(f"Formatted history: {history}")
+        except Exception as e:
+            logger.error(f"Error formatting history: {str(e)}")
+            history = "No relevant historical examples available."
+        
+        # Generate dynamic instructions
+        logger.debug("Generating dynamic instructions")
         node_config = {
             "input_keys": self.input_keys,
             "output_keys": self.output_keys,
             "model_config": self.model_config.__dict__,
             "output_format": self.output_format
         }
-        instructions = PromptGenerator.generate_dynamic_instructions(node_config)
+        logger.debug(f"Node config: {node_config}")
         
-        # Format the prompt template
         try:
-            return self.prompt_template.format(
+            instructions = PromptGenerator.generate_dynamic_instructions(node_config)
+            logger.debug(f"Generated instructions: {instructions}")
+        except Exception as e:
+            logger.error(f"Error generating instructions: {str(e)}")
+            instructions = "Provide a clear and helpful response."
+        
+        # Format the prompt
+        logger.debug("Formatting prompt template")
+        try:
+            prompt_text = self.prompt_template.format(
                 input=message,
-                context=self._generate_context(input_data),
+                context=context,
+                history=history,
                 instructions=instructions
             )
+            logger.debug(f"Formatted prompt: {prompt_text}")
         except ValueError as e:
+            logger.error(f"Error formatting prompt template: {str(e)}")
             # If formatting fails, use a simplified prompt
-            return f"Input: {message}\nContext: {self._generate_context(input_data)}\nInstructions: {instructions}"
+            prompt_text = f"Input: {message}\nContext: {context}\nHistory: {history}\nInstructions: {instructions}"
+            logger.debug(f"Using simplified prompt: {prompt_text}")
 
-    def execute(self, message: str, input_data: Optional[Dict[str, Any]] = None) -> str:
-        self.validate_api_key()
-        # Generate the prompt
-        prompt_text = self._generate_prompt(message, input_data)
-        
         # Create LangChain prompt template
-        prompt = LangChainPrompt(
-            input_variables=["prompt"],
-            template="{prompt}"
+        logger.debug("Creating LangChain prompt template")
+        langchain_prompt = LangChainPrompt(
+            input_variables=["text"],
+            template="{text}"
         )
 
+        logger.debug("Initializing OpenAI LLM")
         llm = OpenAI(
             api_key=os.getenv(self.model_config.api_key_env_var),
             model_name=self.model_config.model,
@@ -151,12 +195,16 @@ class LLMNode(BaseNode):
             max_tokens=self.model_config.max_tokens
         )
 
-        chain = LLMChain(llm=llm, prompt=prompt)
+        logger.debug("Creating and running LLMChain")
+        chain = LLMChain(llm=llm, prompt=langchain_prompt)
         try:
-            response = chain.run(prompt=prompt_text)
+            response = chain.run(text=prompt_text)
             self.last_output = response.strip()
+            logger.info(f"Successfully executed node {self.node_id}")
+            logger.debug(f"Response: {self.last_output}")
             return self.last_output
         except Exception as e:
+            logger.error(f"Error in LLMChain execution: {str(e)}")
             raise Exception(f"Error executing node {self.node_id}: {str(e)}")
 
 class DataProcessingNode(BaseNode):

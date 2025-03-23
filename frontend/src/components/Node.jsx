@@ -283,7 +283,7 @@ Your goal is to provide the most optimized response based on usage patterns.`
           </div>
         )}
         <div className="output-section">
-          <label>AI Response:</label>
+          <label>Output:</label>
           <div className="response-container">
             <textarea
               ref={responseAreaRef}
