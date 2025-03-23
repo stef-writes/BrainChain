@@ -1,0 +1,266 @@
+ScriptChain System Documentation
+=============================
+
+Overview
+--------
+ScriptChain is a sophisticated system for building and managing chains of AI-powered nodes that can process, transform, and generate content. The system is built with modularity, extensibility, and maintainability in mind, using a combination of object-oriented design patterns and modern Python features.
+
+Core Components
+--------------
+
+1. scriptchain.py - Core Chain Management
+----------------------------------------
+The ScriptChain class is the central orchestrator of the entire system. It manages:
+- Node storage and relationships
+- Execution flow between nodes
+- Context management
+- Input/output handling between nodes
+
+Key Functions:
+- add_node(): Adds a new node to the chain
+- get_node(): Retrieves a node by ID
+- add_edge(): Creates connections between nodes
+- get_node_inputs(): Gathers input data from connected nodes
+- execute_node(): Runs a specific node with given input
+- clear_context(): Manages context cleanup
+- get_node_context(): Retrieves stored context for nodes
+
+2. routes.py - API Endpoints
+---------------------------
+Handles all HTTP endpoints for the ScriptChain system. Provides RESTful API access to:
+- Node management (add/remove nodes)
+- Edge management (create connections)
+- Node execution
+- Context management
+- Prompt template updates
+
+Key Endpoints:
+- /add_node: Creates new nodes
+- /add_edge: Establishes node connections
+- /execute: Runs node execution
+- /get_context: Retrieves node context
+- /clear_context: Manages context cleanup
+- /update_prompt: Updates prompt templates
+
+3. prompt_templates.py - Prompt Management
+----------------------------------------
+Manages the generation and formatting of prompts for LLM nodes. Handles:
+- Template creation and validation
+- Context formatting
+- History formatting
+- Dynamic instruction generation
+
+Key Components:
+- PromptGenerator: Handles prompt formatting and generation
+- PromptTemplate: Manages template structure and validation
+- DEFAULT_LLM_TEMPLATE: Default template for LLM nodes
+
+4. node_types.py - Node Implementation
+------------------------------------
+Defines different types of nodes and their behaviors. Implements:
+- Base node interface
+- LLM nodes
+- Data processing nodes
+- Decision nodes
+- Node factory for creation
+
+Key Classes:
+- BaseNode: Abstract base class for all nodes
+- LLMNode: Handles language model interactions
+- DataProcessingNode: Processes and transforms data
+- DecisionNode: Makes decisions based on input
+- NodeFactory: Creates appropriate node instances
+
+5. models.py - Database Models
+----------------------------
+Defines the database schema for persistent storage. Manages:
+- Node storage
+- Execution history
+- Node connections
+- Metadata storage
+
+Key Models:
+- Node: Stores node configuration and metadata
+- ExecutionHistory: Tracks execution records
+- node_connections: Manages node relationships
+
+6. model_config.py - Model Configuration
+--------------------------------------
+Handles configuration for different types of AI models. Manages:
+- Model parameters
+- Provider settings
+- Task types
+- Fallback strategies
+
+Key Classes:
+- BaseModelConfig: Base configuration for all models
+- LLMConfig: Language model specific settings
+- ImageModelConfig: Image generation settings
+- AgentConfig: Autonomous agent settings
+
+7. context_manager.py - Context Management
+----------------------------------------
+Manages the context and history of node executions. Handles:
+- Context storage and retrieval
+- History management
+- Semantic search
+- Token optimization
+- Data sanitization
+
+Key Features:
+- Semantic search for relevant history
+- Context compression
+- Token usage optimization
+- Thread-safe operations
+- Database integration
+
+System Flow
+----------
+1. Initialization:
+   - ScriptChain instance is created
+   - ContextManager is initialized
+   - Database models are set up
+
+2. Node Creation:
+   - Client calls /add_node endpoint
+   - NodeFactory creates appropriate node type
+   - Node is added to ScriptChain
+   - Node configuration is stored in database
+
+3. Connection Setup:
+   - Client calls /add_edge endpoint
+   - Connection is established between nodes
+   - Relationship is stored in database
+
+4. Execution Flow:
+   - Client calls /execute endpoint with node ID and input
+   - ScriptChain retrieves node and its inputs
+   - ContextManager provides relevant history
+   - Node executes with provided context
+   - Results are stored in context and history
+
+5. Context Management:
+   - ContextManager maintains execution history
+   - Provides relevant historical examples
+   - Optimizes context for token limits
+   - Handles data persistence
+
+Advanced Features
+---------------
+1. Semantic Search:
+   - Uses sentence-transformers for similarity matching
+   - Caches embeddings for performance
+   - Falls back to recency-based selection
+
+2. Adaptive Parameters:
+   - Adjusts model parameters based on task type
+   - Manages token usage
+   - Handles fallback models
+
+3. Thread Safety:
+   - Uses locks for concurrent operations
+   - Implements thread pool for parallel processing
+   - Handles database transactions safely
+
+4. Error Handling:
+   - Comprehensive error catching
+   - Graceful fallbacks
+   - Detailed logging
+
+5. Data Sanitization:
+   - Validates input data
+   - Sanitizes for storage
+   - Handles various data types
+
+Usage Example
+------------
+1. Create a chain:
+   ```python
+   chain = ScriptChain()
+   ```
+
+2. Add nodes:
+   ```python
+   llm_node = NodeFactory.create_node(
+       node_type="LLM",
+       node_id="node1",
+       model_config=LLMConfig()
+   )
+   chain.add_node(llm_node)
+   ```
+
+3. Connect nodes:
+   ```python
+   chain.add_edge("node1", "node2")
+   ```
+
+4. Execute:
+   ```python
+   result = chain.execute_node("node1", "Input message")
+   ```
+
+Best Practices
+-------------
+1. Node Design:
+   - Keep nodes focused and single-purpose
+   - Implement proper error handling
+   - Use appropriate node types
+
+2. Context Management:
+   - Monitor token usage
+   - Use semantic search when appropriate
+   - Implement proper cleanup
+
+3. Configuration:
+   - Use appropriate model settings
+   - Implement fallback strategies
+   - Monitor resource usage
+
+4. Error Handling:
+   - Implement proper error catching
+   - Use appropriate logging
+   - Handle edge cases
+
+5. Performance:
+   - Use caching where appropriate
+   - Implement parallel processing
+   - Monitor memory usage
+
+Security Considerations
+---------------------
+1. API Key Management:
+   - Store keys in environment variables
+   - Implement proper validation
+   - Use secure storage
+
+2. Data Handling:
+   - Sanitize input data
+   - Validate output data
+   - Implement proper access controls
+
+3. Error Exposure:
+   - Limit error details in responses
+   - Implement proper logging
+   - Handle sensitive information
+
+Future Improvements
+------------------
+1. Performance:
+   - Implement distributed processing
+   - Add caching layers
+   - Optimize database queries
+
+2. Features:
+   - Add more node types
+   - Implement workflow templates
+   - Add monitoring and metrics
+
+3. Integration:
+   - Add more model providers
+   - Implement API versioning
+   - Add authentication system
+
+4. Development:
+   - Add comprehensive testing
+   - Implement CI/CD
+   - Add documentation generation 
