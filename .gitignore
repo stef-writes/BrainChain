@@ -46,3 +46,12 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Project specific
+backend/app.log
+backend/app/scriptchain.db
+backend/app/config/
+frontend copy/
+*.db
+*.sqlite
+*.sqlite3
